@@ -1,0 +1,17 @@
+# Locally built executables
+/batlify-packs
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Go test and coverage output
+*.test
+coverage.out
+coverage.html
+
+# Local editor and operating-system files
+/.idea/
+/.vscode/
+.DS_Store
