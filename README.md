@@ -108,8 +108,4 @@ go test -race ./...
 go vet ./...
 ```
 
-Provider changes should include detection and generated-recipe coverage. Container integration checks should also verify that the produced image starts and serves the expected application.
-
-## License
-
 No license has been selected for this repository yet. Add a `LICENSE` file before publishing so users know how they may use and redistribute the project.
