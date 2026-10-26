@@ -574,6 +574,9 @@ func TestGradleDockerfilePreservesBuildStageOrdering(t *testing.T) {
 		}
 		position += relative + len(fragment)
 	}
+	if !strings.Contains(dockerfile, "! -name '*-plain.jar'") || !strings.Contains(dockerfile, `if [ -z "$artifact" ]; then artifact=$(find build/libs`) {
+		t.Fatalf("Gradle artifact selection must prefer an executable boot JAR and retain a fallback:\n%s", dockerfile)
+	}
 }
 
 func TestGeneratedDockerfileUsesFullyQualifiedBaseImages(t *testing.T) {

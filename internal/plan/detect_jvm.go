@@ -59,7 +59,8 @@ func javaPlan(root string) (Plan, error) {
 
 func selectJarCommand(outputDir string) string {
 	return strings.Join([]string{
-		fmt.Sprintf(`artifact=$(find %s -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' | sort | head -n 1)`, outputDir),
+		fmt.Sprintf(`artifact=$(find %s -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' ! -name '*-plain.jar' | sort | head -n 1)`, outputDir),
+		fmt.Sprintf(`if [ -z "$artifact" ]; then artifact=$(find %s -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name 'original-*' | sort | head -n 1); fi`, outputDir),
 		`test -n "$artifact"`,
 		`mkdir -p /out`,
 		`cp "$artifact" /out/app.jar`,
