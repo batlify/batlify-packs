@@ -120,7 +120,9 @@ func writeRubyDockerfile(b *strings.Builder, p Plan) {
 }
 
 func writeElixirDockerfile(b *strings.Builder, p Plan) {
-	fmt.Fprintf(b, "FROM %s AS build\nWORKDIR /app\n", p.BuilderImage)
+	fmt.Fprintf(b, "FROM %s AS build\n", p.BuilderImage)
+	b.WriteString("RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*\n")
+	b.WriteString("WORKDIR /app\n")
 	for _, f := range p.DependencyFiles {
 		writeManifestCopy(b, f)
 	}

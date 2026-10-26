@@ -353,6 +353,30 @@ func TestDetectGoUsesScratchRuntimeAndSubdirectoryEntrypoint(t *testing.T) {
 	}
 }
 
+func TestElixirDockerfileInstallsCertificatesForHex(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "mix.exs", `defmodule MatrixApp.MixProject do
+  use Mix.Project
+  def project, do: [app: :matrix_app, version: "0.1.0", elixir: "~> 1.17", deps: []]
+end
+`)
+	writeFile(t, root, "mix.lock", "%{}\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificates := strings.Index(dockerfile, "apt-get install -y --no-install-recommends ca-certificates")
+	hex := strings.Index(dockerfile, "mix local.hex --force")
+	if certificates < 0 || hex < 0 || certificates > hex {
+		t.Fatalf("Elixir build stage must install CA certificates before contacting Hex:\n%s", dockerfile)
+	}
+}
+
 func TestDetectGoRejectsMultipleCommandEntrypoints(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "go.mod", "module example.test/app\n\ngo 1.22\n")
