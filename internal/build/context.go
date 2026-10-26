@@ -20,6 +20,7 @@ type ignoreRule struct {
 
 var defaultIgnore = []string{
 	".git", ".hg", ".svn", ".env", ".env.*", ".DS_Store",
+	"config/master.key", "config/credentials/*.key",
 	"node_modules", ".venv", "venv", "__pycache__", "*.pyc",
 	".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode",
 	".next", ".npm", "coverage", "vendor",

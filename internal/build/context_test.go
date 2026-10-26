@@ -16,16 +16,18 @@ import (
 func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"main.js":                    "console.log('ok')",
-		"Dockerfile":                 "FROM user-image\n",
-		".env":                       "SECRET=hidden",
-		"node_modules/pkg/index.js":  "not sent",
-		".next/server/server.js":     "stale Next.js output",
-		"vendor/autoload.php":        "installed Composer dependency",
-		"public/build/manifest.json": "stale Laravel frontend output",
-		"debug.log":                  "ignored by user",
-		"keep.log":                   "explicitly included",
-		".dockerignore":              "*.log\n!keep.log\n",
+		"main.js":                           "console.log('ok')",
+		"Dockerfile":                        "FROM user-image\n",
+		".env":                              "SECRET=hidden",
+		"config/master.key":                 "rails secret",
+		"config/credentials/production.key": "rails production secret",
+		"node_modules/pkg/index.js":         "not sent",
+		".next/server/server.js":            "stale Next.js output",
+		"vendor/autoload.php":               "installed Composer dependency",
+		"public/build/manifest.json":        "stale Laravel frontend output",
+		"debug.log":                         "ignored by user",
+		"keep.log":                          "explicitly included",
+		".dockerignore":                     "*.log\n!keep.log\n",
 	}
 	for name, content := range files {
 		path := filepath.Join(root, name)
@@ -76,7 +78,7 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 			t.Errorf("expected context to contain %q; got %v", name, names)
 		}
 	}
-	for _, name := range []string{".env", "node_modules/pkg/index.js", ".next/server/server.js", "vendor/autoload.php", "public/build/manifest.json", "debug.log"} {
+	for _, name := range []string{".env", "config/master.key", "config/credentials/production.key", "node_modules/pkg/index.js", ".next/server/server.js", "vendor/autoload.php", "public/build/manifest.json", "debug.log"} {
 		if seen[name] {
 			t.Errorf("expected context to exclude %q", name)
 		}
