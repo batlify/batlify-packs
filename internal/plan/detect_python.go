@@ -19,6 +19,7 @@ func pythonPlan(root string) (Plan, error) {
 	deps := filesMatching(root, "requirements.txt", "requirements-prod.txt", "pyproject.toml", "Pipfile", "Pipfile.lock")
 	install := ""
 	runtimeVenv := false
+	packageManager := "pip"
 	if exists(root, "requirements.txt") {
 		install = "pip install --prefix=/install -r requirements.txt"
 	} else if exists(root, "requirements-prod.txt") {
@@ -33,7 +34,16 @@ func pythonPlan(root string) (Plan, error) {
 			}
 			install = "pip install poetry && poetry config virtualenvs.in-project true && poetry install --only main --no-interaction --no-root"
 			runtimeVenv = true
+			packageManager = "Poetry"
 			deps = filesMatching(root, "pyproject.toml", "poetry.lock")
+		} else if exists(root, "uv.lock") || strings.Contains(content, "[tool.uv]") {
+			if !exists(root, "uv.lock") {
+				return Plan{}, errors.New("uv project needs uv.lock for a reproducible dependency install")
+			}
+			install = "pip install uv && UV_PROJECT_ENVIRONMENT=/app/.venv UV_CACHE_DIR=/root/.cache/pip/uv uv sync --frozen --no-dev --no-install-project"
+			runtimeVenv = true
+			packageManager = "uv"
+			deps = filesMatching(root, "pyproject.toml", "uv.lock")
 		} else {
 			install = "pip install --prefix=/install ."
 		}
@@ -43,6 +53,7 @@ func pythonPlan(root string) (Plan, error) {
 		}
 		install = "pip install pipenv && PIPENV_VENV_IN_PROJECT=1 pipenv install --deploy --ignore-pipfile"
 		runtimeVenv = true
+		packageManager = "Pipenv"
 	}
 	port := 8000
 	var start []string
@@ -81,12 +92,6 @@ func pythonPlan(root string) (Plan, error) {
 		!exists(root, "requirements.txt") && !exists(root, "requirements-prod.txt") && !runtimeVenv
 	if !installAfterCopy && !runtimeVenv {
 		installAfterCopy = pythonRequirementsUseLocalPath(root)
-	}
-	packageManager := "pip"
-	if runtimeVenv && exists(root, "Pipfile") {
-		packageManager = "Pipenv"
-	} else if runtimeVenv {
-		packageManager = "Poetry"
 	}
 	if runtimeVenv && len(start) > 0 && start[0] == "python" {
 		start[0] = "/app/.venv/bin/python"

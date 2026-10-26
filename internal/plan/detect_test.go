@@ -651,6 +651,41 @@ func TestDetectPoetryUsesVenvAndKeepsBuilderToolsOutOfRuntime(t *testing.T) {
 	}
 }
 
+func TestDetectUVUsesLockedDependenciesAndRuntimeVenv(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "pyproject.toml", "[project]\nname='demo'\nrequires-python='>=3.12'\ndependencies=['fastapi', 'uvicorn']\n[tool.uv]\npackage=false\n")
+	writeFile(t, root, "uv.lock", "version = 1\n")
+	writeFile(t, root, "main.py", "from fastapi import FastAPI\napp = FastAPI()\n")
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.PackageManager != "uv" || !p.RuntimeVenv || p.Version != "3.12" {
+		t.Fatalf("unexpected uv plan: %#v", p)
+	}
+	if !strings.Contains(p.InstallCommand, "uv sync --frozen --no-dev --no-install-project") {
+		t.Fatalf("uv plan does not use the locked production dependencies: %q", p.InstallCommand)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"COPY [\"pyproject.toml\", \"pyproject.toml\"]", "COPY [\"uv.lock\", \"uv.lock\"]", "UV_CACHE_DIR=/root/.cache/pip/uv", "ENV PATH=/app/.venv/bin:$PATH"} {
+		if !strings.Contains(dockerfile, expected) {
+			t.Errorf("uv Dockerfile missing %q:\n%s", expected, dockerfile)
+		}
+	}
+}
+
+func TestDetectUVRequiresLockfile(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "pyproject.toml", "[project]\nname='demo'\n[tool.uv]\npackage=false\n")
+	writeFile(t, root, "main.py", "print('ready')\n")
+	if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "uv.lock") {
+		t.Fatalf("expected missing uv.lock error, got %v", err)
+	}
+}
+
 func TestGradleDockerfilePreservesBuildStageOrdering(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "build.gradle", "plugins { id 'java' }\n")

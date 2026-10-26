@@ -73,7 +73,7 @@ Detection uses project manifests and conventional entry points. A provider may r
 | --- | --- |
 | Node.js | `package.json`; npm, pnpm, Yarn, or Bun; server apps and common static output from Vite, Create React App, Gatsby, Angular, Vue CLI, and Astro. Next.js uses its standalone runtime when `next.config.*` sets `output: 'standalone'`; otherwise it uses its production start command. |
 | Deno | `deno.json` or `deno.jsonc` with a `start` task, or a conventional entry file. |
-| Python | `requirements.txt`, `requirements-prod.txt`, `pyproject.toml`, `Pipfile`, or `setup.py`; conventional Django, Flask, FastAPI, or Python entry points. |
+| Python | Pip requirements files; Poetry, uv, and Pipenv projects with their lockfiles; conventional Django, Flask, FastAPI, or Python entry points. |
 | Go | `go.mod` and a root `main.go`, or one command under `cmd/`. |
 | Rust | A root `Cargo.toml` with one package. |
 | Java and JVM | Maven or Gradle projects that produce an executable JAR. |
