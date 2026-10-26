@@ -52,6 +52,7 @@ func Detect(root string) (Plan, error) {
 		{name: "ruby", matches: exists(abs, "Gemfile"), createPlan: rubyPlan},
 		{name: "php", matches: (anyExists(abs, "composer.json", "index.php") || exists(abs, "public/index.php")) && !laravel, createPlan: phpPlan},
 		{name: "elixir", matches: exists(abs, "mix.exs"), createPlan: elixirPlan},
+		{name: "dart", matches: exists(abs, "pubspec.yaml"), createPlan: dartPlan},
 		{name: "cmake", matches: exists(abs, "CMakeLists.txt"), createPlan: cmakePlan},
 		{name: "static", matches: exists(abs, "index.html"), createPlan: staticPlan},
 	}

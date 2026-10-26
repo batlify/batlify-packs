@@ -68,6 +68,8 @@ func (p Plan) Dockerfile() (string, error) {
 		writeLaravelDockerfile(&b, p)
 	case "elixir":
 		writeElixirDockerfile(&b, p)
+	case "dart":
+		writeDartDockerfile(&b, p)
 	case "static":
 		writeStaticDockerfile(&b)
 	default:

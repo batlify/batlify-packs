@@ -17,11 +17,14 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
 		"main.js":                           "console.log('ok')",
+		"bin/server.dart":                   "void main() {}",
 		"Dockerfile":                        "FROM user-image\n",
 		".env":                              "SECRET=hidden",
 		"config/master.key":                 "rails secret",
 		"config/credentials/production.key": "rails production secret",
 		"node_modules/pkg/index.js":         "not sent",
+		".dart_tool/package_config.json":    "generated dependency paths",
+		".packages":                         "generated package map",
 		".next/server/server.js":            "stale Next.js output",
 		"vendor/autoload.php":               "installed Composer dependency",
 		"public/build/manifest.json":        "stale Laravel frontend output",
@@ -39,7 +42,7 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 		}
 	}
 	var archive bytes.Buffer
-	if err := writeContextTar(&archive, root, generatedDockerfile, "FROM scratch\n", "public/build"); err != nil {
+	if err := writeContextTar(&archive, root, generatedDockerfile, "FROM scratch\n", "public/build", "!bin"); err != nil {
 		t.Fatal(err)
 	}
 	reader := tar.NewReader(&archive)
@@ -73,17 +76,17 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 	for _, name := range names {
 		seen[name] = true
 	}
-	for _, name := range []string{"main.js", ".dockerignore", "keep.log", generatedDockerfile} {
+	for _, name := range []string{"main.js", "bin/server.dart", ".dockerignore", "keep.log", generatedDockerfile} {
 		if !seen[name] {
 			t.Errorf("expected context to contain %q; got %v", name, names)
 		}
 	}
-	for _, name := range []string{".env", "config/master.key", "config/credentials/production.key", "node_modules/pkg/index.js", ".next/server/server.js", "vendor/autoload.php", "public/build/manifest.json", "debug.log"} {
+	for _, name := range []string{".env", "config/master.key", "config/credentials/production.key", "node_modules/pkg/index.js", ".dart_tool/package_config.json", ".packages", ".next/server/server.js", "vendor/autoload.php", "public/build/manifest.json", "debug.log"} {
 		if seen[name] {
 			t.Errorf("expected context to exclude %q", name)
 		}
 	}
-	if !strings.Contains(dockerIgnoreContents, "public/build\n*.log\n!keep.log\nDockerfile\n.dockerignore\n") {
+	if !strings.Contains(dockerIgnoreContents, "public/build\n!bin\n*.log\n!keep.log\nDockerfile\n.dockerignore\n") {
 		t.Fatalf("context ignore file did not preserve project rules and exclude build files: %q", dockerIgnoreContents)
 	}
 	if dockerfileContents != "FROM scratch\n" {

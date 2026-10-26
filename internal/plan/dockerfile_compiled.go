@@ -140,3 +140,22 @@ USER 65532:65532
 `, p.InstallCommand, p.BuildCommand, p.RuntimeImage, dockerPath(p.ProjectFile))
 	writeExposeAndCommand(b, p)
 }
+
+func writeDartDockerfile(b *strings.Builder, p Plan) {
+	fmt.Fprintf(b, `FROM %s AS build
+WORKDIR /app
+`, p.BuilderImage)
+	for _, file := range p.DependencyFiles {
+		writeManifestCopy(b, file)
+	}
+	b.WriteString("RUN --mount=type=cache,target=/root/.pub-cache dart pub get --enforce-lockfile\nCOPY . .\n")
+	writeRun(b, p.BuildCacheTarget, fmt.Sprintf("dart build cli --target=%s --output=/out", shellQuote(dockerPath(p.ProjectFile))))
+	b.WriteByte('\n')
+	fmt.Fprintf(b, `FROM %s AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build --chown=65532:65532 /out/bundle/ /app/
+USER 65532:65532
+`, p.RuntimeImage)
+	writeExposeAndCommand(b, p)
+}

@@ -82,6 +82,7 @@ Detection uses project manifests and conventional entry points. A provider may r
 | Laravel | A root `composer.json` requiring `laravel/framework`, plus `artisan` and `public/index.php`. If a root `package.json` is present, it must define a `build` script that writes assets under `public/build` (the Laravel Vite default). A server-rendered Next.js app must be built as a separate image. |
 | PHP | Composer projects or a conventional `index.php` entry point. |
 | Elixir | Mix releases with a lockfile and an inferable application name. |
+| Dart | Dart 3.10+ server or command-line projects with `pubspec.lock` and an entry point under `bin/`; `dart build cli` creates a runtime bundle without the SDK. |
 | C and C++ | CMake projects with a literal `add_executable` target. |
 | Static sites | A root `index.html`. |
 

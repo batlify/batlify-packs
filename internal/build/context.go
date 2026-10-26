@@ -22,6 +22,7 @@ var defaultIgnore = []string{
 	".git", ".hg", ".svn", ".env", ".env.*", ".DS_Store",
 	"config/master.key", "config/credentials/*.key",
 	"node_modules", ".venv", "venv", "__pycache__", "*.pyc",
+	".dart_tool", ".packages",
 	".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode",
 	".next", ".npm", "coverage", "vendor",
 	"target", "bin", "obj",

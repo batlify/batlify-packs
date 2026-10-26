@@ -763,6 +763,62 @@ func TestScalaSBTRequiresPinnedVersionAndAssemblyPlugin(t *testing.T) {
 	})
 }
 
+func TestDartBuildsAOTBundleInSmallRuntimeImage(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "pubspec.yaml", "name: demo_server\nenvironment:\n  sdk: '>=3.10.0 <4.0.0'\ndependencies: {}\n")
+	writeFile(t, root, "pubspec.lock", "packages: {}\n")
+	writeFile(t, root, ".dart-version", "3.13.2\n")
+	writeFile(t, root, "bin/server.dart", "void main() {}\n")
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Provider != "dart" || p.PackageManager != "Pub" || p.BuilderImage != "dart:3.13.2-sdk" || p.RuntimeImage != "debian:trixie-slim" {
+		t.Fatalf("unexpected Dart plan: %#v", p)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"dart pub get --enforce-lockfile", "RUN --mount=type=cache,target=/root/.pub-cache dart build cli --target='bin/server.dart' --output=/out", "COPY --from=build --chown=65532:65532 /out/bundle/ /app/", `CMD ["/app/bin/server"]`} {
+		if !strings.Contains(dockerfile, expected) {
+			t.Errorf("Dart Dockerfile missing %q:\n%s", expected, dockerfile)
+		}
+	}
+	if strings.Contains(dockerfile, "FROM dart:3.13.2-sdk AS runtime") {
+		t.Fatalf("Dart SDK leaked into runtime stage:\n%s", dockerfile)
+	}
+}
+
+func TestDartRequiresLockfileAndUnambiguousEntrypoint(t *testing.T) {
+	t.Run("lockfile", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "pubspec.yaml", "name: demo\n")
+		writeFile(t, root, "bin/server.dart", "void main() {}\n")
+		if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "pubspec.lock") {
+			t.Fatalf("expected missing Dart lockfile error, got %v", err)
+		}
+	})
+	t.Run("entrypoint", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "pubspec.yaml", "name: demo\n")
+		writeFile(t, root, "pubspec.lock", "packages: {}\n")
+		if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "entry point") {
+			t.Fatalf("expected missing Dart entrypoint error, got %v", err)
+		}
+	})
+	t.Run("old pinned SDK", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "pubspec.yaml", "name: demo\n")
+		writeFile(t, root, "pubspec.lock", "packages: {}\n")
+		writeFile(t, root, ".dart-version", "3.9.4\n")
+		writeFile(t, root, "bin/server.dart", "void main() {}\n")
+		if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "Dart 3.10 or newer") {
+			t.Fatalf("expected unsupported pinned Dart SDK error, got %v", err)
+		}
+	})
+}
+
 func TestGeneratedDockerfileUsesFullyQualifiedBaseImages(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "index.html", "hello")
