@@ -84,6 +84,7 @@ func phpPlan(root string) (Plan, error) {
 
 func laravelPlan(root string, composer composerManifest) (Plan, error) {
 	var frontend *JavaScriptBuild
+	var buildContextIgnore []string
 	if exists(root, "package.json") {
 		var manifest nodeManifest
 		if err := json.Unmarshal([]byte(read(root, "package.json")), &manifest); err != nil {
@@ -100,23 +101,25 @@ func laravelPlan(root string, composer composerManifest) (Plan, error) {
 			return Plan{}, errors.New("Laravel project contains package.json but no build script; add a frontend build script or remove package.json")
 		}
 		frontend = &config
+		buildContextIgnore = []string{"public/build"}
 	}
 
 	version := phpVersion(composer)
 	return Plan{
-		Provider:        "laravel",
-		Language:        "PHP (Laravel)",
-		Version:         version,
-		BuilderImage:    "php:" + version + "-cli-bookworm",
-		RuntimeImage:    "php:" + version + "-cli-bookworm",
-		RuntimeKind:     "laravel",
-		PackageManager:  "Composer",
-		InstallCommand:  "composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader",
-		BuildCommand:    "composer dump-autoload --no-dev --optimize",
-		StartCommand:    []string{"php", "-S", "0.0.0.0:8080", "-t", "public", ".batlify-packs-router.php"},
-		Port:            8080,
-		DependencyFiles: filesMatching(root, "composer.json", "composer.lock"),
-		FrontendBuild:   frontend,
+		Provider:           "laravel",
+		Language:           "PHP (Laravel)",
+		Version:            version,
+		BuilderImage:       "php:" + version + "-cli-bookworm",
+		RuntimeImage:       "php:" + version + "-cli-bookworm",
+		RuntimeKind:        "laravel",
+		PackageManager:     "Composer",
+		InstallCommand:     "composer install --no-dev --no-interaction --prefer-dist --no-scripts --no-autoloader",
+		BuildCommand:       "composer dump-autoload --no-dev --optimize",
+		StartCommand:       []string{"php", "-S", "0.0.0.0:8080", "-t", "public", ".batlify-packs-router.php"},
+		Port:               8080,
+		DependencyFiles:    filesMatching(root, "composer.json", "composer.lock"),
+		FrontendBuild:      frontend,
+		BuildContextIgnore: buildContextIgnore,
 	}, nil
 }
 

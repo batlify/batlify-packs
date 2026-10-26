@@ -49,7 +49,7 @@ func BuildWithOptions(p plan.Plan, image string, stdout, stderr io.Writer, optio
 	}
 	archiveDone := make(chan error, 1)
 	go func() {
-		archiveErr := writeContextTar(pipeWriter, p.ProjectDir, generatedDockerfile, dockerfile)
+		archiveErr := writeContextTar(pipeWriter, p.ProjectDir, generatedDockerfile, dockerfile, p.BuildContextIgnore...)
 		_ = pipeWriter.CloseWithError(archiveErr)
 		archiveDone <- archiveErr
 	}()

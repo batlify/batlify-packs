@@ -152,6 +152,9 @@ func TestDetectLaravelWithReactFrontend(t *testing.T) {
 	if p.Provider != "laravel" || p.Version != "8.3" || p.FrontendBuild == nil {
 		t.Fatalf("unexpected Laravel full-stack plan: %#v", p)
 	}
+	if len(p.BuildContextIgnore) != 1 || p.BuildContextIgnore[0] != "public/build" {
+		t.Fatalf("Laravel with a frontend should exclude stale build output: %#v", p.BuildContextIgnore)
+	}
 	if p.FrontendBuild.PackageManager != "npm" || p.FrontendBuild.BuildCommand != "npm run build" {
 		t.Fatalf("unexpected frontend build plan: %#v", p.FrontendBuild)
 	}

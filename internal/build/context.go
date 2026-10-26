@@ -22,12 +22,12 @@ var defaultIgnore = []string{
 	".git", ".hg", ".svn", ".env", ".env.*", ".DS_Store",
 	"node_modules", ".venv", "venv", "__pycache__", "*.pyc",
 	".pytest_cache", ".mypy_cache", ".ruff_cache", ".idea", ".vscode",
-	".next/cache", ".npm", "coverage",
+	".next", ".npm", "coverage", "vendor",
 	"target", "bin", "obj",
 }
 
-func writeContextTar(w io.Writer, root, dockerfile, dockerfileContent string) error {
-	rules, hasNegation, err := loadIgnoreRules(root)
+func writeContextTar(w io.Writer, root, dockerfile, dockerfileContent string, additionalIgnore ...string) error {
+	rules, hasNegation, err := loadIgnoreRules(root, additionalIgnore...)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,11 @@ func writeContextTar(w io.Writer, root, dockerfile, dockerfileContent string) er
 		_ = tw.Close()
 		return fmt.Errorf("read .dockerignore: %w", err)
 	}
-	ignoreText := strings.ReplaceAll(string(ignoreContents), "\r\n", "\n")
+	ignoreText := strings.Join(additionalIgnore, "\n")
+	if ignoreText != "" {
+		ignoreText += "\n"
+	}
+	ignoreText += strings.ReplaceAll(string(ignoreContents), "\r\n", "\n")
 	if ignoreText != "" && !strings.HasSuffix(ignoreText, "\n") {
 		ignoreText += "\n"
 	}
@@ -123,8 +127,9 @@ func writeContextFile(tw *tar.Writer, name, contents string) error {
 	return err
 }
 
-func loadIgnoreRules(root string) ([]ignoreRule, bool, error) {
+func loadIgnoreRules(root string, additionalIgnore ...string) ([]ignoreRule, bool, error) {
 	lines := append([]string(nil), defaultIgnore...)
+	lines = append(lines, additionalIgnore...)
 	contents, err := os.ReadFile(filepath.Join(root, ".dockerignore"))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, false, fmt.Errorf("read .dockerignore: %w", err)

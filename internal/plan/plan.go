@@ -9,27 +9,28 @@ import (
 // Plan is the stable, inspectable description of the build that is also used
 // to render the temporary Dockerfile passed to Docker BuildKit.
 type Plan struct {
-	ProjectDir        string           `json:"projectDir"`
-	Provider          string           `json:"provider"`
-	Language          string           `json:"language"`
-	Version           string           `json:"version"`
-	BuilderImage      string           `json:"builderImage"`
-	RuntimeImage      string           `json:"runtimeImage"`
-	PackageManager    string           `json:"packageManager,omitempty"`
-	BuildCommand      string           `json:"buildCommand,omitempty"`
-	StartCommand      []string         `json:"startCommand"`
-	Port              int              `json:"port,omitempty"`
-	DependencyFiles   []string         `json:"dependencyFiles,omitempty"`
-	ProjectFile       string           `json:"projectFile,omitempty"`
-	RuntimeOutputDir  string           `json:"runtimeOutputDir,omitempty"`
-	FrontendBuild     *JavaScriptBuild `json:"frontendBuild,omitempty"`
-	NextStandalone    bool             `json:"nextStandalone,omitempty"`
-	BuildCacheTarget  string           `json:"-"`
-	RuntimeKind       string           `json:"-"`
-	InstallCommand    string           `json:"-"`
-	ProductionCommand string           `json:"-"`
-	InstallAfterCopy  bool             `json:"-"`
-	RuntimeVenv       bool             `json:"-"`
+	ProjectDir         string           `json:"projectDir"`
+	Provider           string           `json:"provider"`
+	Language           string           `json:"language"`
+	Version            string           `json:"version"`
+	BuilderImage       string           `json:"builderImage"`
+	RuntimeImage       string           `json:"runtimeImage"`
+	PackageManager     string           `json:"packageManager,omitempty"`
+	BuildCommand       string           `json:"buildCommand,omitempty"`
+	StartCommand       []string         `json:"startCommand"`
+	Port               int              `json:"port,omitempty"`
+	DependencyFiles    []string         `json:"dependencyFiles,omitempty"`
+	ProjectFile        string           `json:"projectFile,omitempty"`
+	RuntimeOutputDir   string           `json:"runtimeOutputDir,omitempty"`
+	FrontendBuild      *JavaScriptBuild `json:"frontendBuild,omitempty"`
+	NextStandalone     bool             `json:"nextStandalone,omitempty"`
+	BuildCacheTarget   string           `json:"-"`
+	RuntimeKind        string           `json:"-"`
+	InstallCommand     string           `json:"-"`
+	ProductionCommand  string           `json:"-"`
+	InstallAfterCopy   bool             `json:"-"`
+	RuntimeVenv        bool             `json:"-"`
+	BuildContextIgnore []string         `json:"-"`
 }
 
 // Dockerfile returns the internal multi-stage Dockerfile. It intentionally

@@ -16,13 +16,16 @@ import (
 func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"main.js":                   "console.log('ok')",
-		"Dockerfile":                "FROM user-image\n",
-		".env":                      "SECRET=hidden",
-		"node_modules/pkg/index.js": "not sent",
-		"debug.log":                 "ignored by user",
-		"keep.log":                  "explicitly included",
-		".dockerignore":             "*.log\n!keep.log\n",
+		"main.js":                    "console.log('ok')",
+		"Dockerfile":                 "FROM user-image\n",
+		".env":                       "SECRET=hidden",
+		"node_modules/pkg/index.js":  "not sent",
+		".next/server/server.js":     "stale Next.js output",
+		"vendor/autoload.php":        "installed Composer dependency",
+		"public/build/manifest.json": "stale Laravel frontend output",
+		"debug.log":                  "ignored by user",
+		"keep.log":                   "explicitly included",
+		".dockerignore":              "*.log\n!keep.log\n",
 	}
 	for name, content := range files {
 		path := filepath.Join(root, name)
@@ -34,7 +37,7 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 		}
 	}
 	var archive bytes.Buffer
-	if err := writeContextTar(&archive, root, generatedDockerfile, "FROM scratch\n"); err != nil {
+	if err := writeContextTar(&archive, root, generatedDockerfile, "FROM scratch\n", "public/build"); err != nil {
 		t.Fatal(err)
 	}
 	reader := tar.NewReader(&archive)
@@ -73,12 +76,12 @@ func TestWriteContextTarFiltersDefaultsAndAppliesDockerignore(t *testing.T) {
 			t.Errorf("expected context to contain %q; got %v", name, names)
 		}
 	}
-	for _, name := range []string{".env", "node_modules/pkg/index.js", "debug.log"} {
+	for _, name := range []string{".env", "node_modules/pkg/index.js", ".next/server/server.js", "vendor/autoload.php", "public/build/manifest.json", "debug.log"} {
 		if seen[name] {
 			t.Errorf("expected context to exclude %q", name)
 		}
 	}
-	if !strings.Contains(dockerIgnoreContents, "*.log\n!keep.log\nDockerfile\n.dockerignore\n") {
+	if !strings.Contains(dockerIgnoreContents, "public/build\n*.log\n!keep.log\nDockerfile\n.dockerignore\n") {
 		t.Fatalf("context ignore file did not preserve project rules and exclude build files: %q", dockerIgnoreContents)
 	}
 	if dockerfileContents != "FROM scratch\n" {
