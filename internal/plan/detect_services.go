@@ -23,28 +23,31 @@ func rubyPlan(root string) (Plan, error) {
 	gemfile := read(root, "Gemfile")
 	version = firstMatch(regexp.MustCompile(`(?m)^\s*ruby\s+["']([0-9]+\.[0-9]+)`), gemfile, version)
 	var start []string
+	var buildContextIgnore []string
 	port := 3000
-	if exists(root, "config.ru") {
+	if exists(root, "config/application.rb") {
+		start = []string{"bin/rails", "server", "-b", "0.0.0.0", "-p", "3000"}
+		buildContextIgnore = []string{"!bin"}
+	} else if exists(root, "config.ru") {
 		start = []string{"bundle", "exec", "rackup", "--host", "0.0.0.0", "-p", "3000"}
-	} else if exists(root, "config/application.rb") {
-		start = []string{"bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"}
 	} else if exists(root, "app.rb") {
 		start = []string{"ruby", "app.rb"}
 	} else {
 		return Plan{}, errors.New("Ruby project has no config.ru, Rails application, or app.rb start target; build stopped")
 	}
 	return Plan{
-		Provider:        "ruby",
-		Language:        "Ruby",
-		Version:         version,
-		BuilderImage:    "ruby:" + version + "-bookworm",
-		RuntimeImage:    "ruby:" + version + "-slim-bookworm",
-		RuntimeKind:     "ruby",
-		PackageManager:  "Bundler",
-		InstallCommand:  "bundle config set without 'development test' && bundle install",
-		StartCommand:    start,
-		Port:            port,
-		DependencyFiles: filesMatching(root, "Gemfile", "Gemfile.lock", ".ruby-version"),
+		Provider:           "ruby",
+		Language:           "Ruby",
+		Version:            version,
+		BuilderImage:       "ruby:" + version + "-bookworm",
+		RuntimeImage:       "ruby:" + version + "-slim-bookworm",
+		RuntimeKind:        "ruby",
+		PackageManager:     "Bundler",
+		InstallCommand:     "bundle config set without 'development test' && bundle install",
+		StartCommand:       start,
+		Port:               port,
+		DependencyFiles:    filesMatching(root, "Gemfile", "Gemfile.lock", ".ruby-version"),
+		BuildContextIgnore: buildContextIgnore,
 	}, nil
 }
 

@@ -19,6 +19,38 @@ func writeFile(t *testing.T, root, name, contents string) {
 	}
 }
 
+func TestRubyProjectsPreferRailsServerWhenRackConfigExists(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Gemfile", "source \"https://rubygems.org\"\ngem \"rails\"\n")
+	writeFile(t, root, "config/application.rb", "module Demo; class Application < Rails::Application; end; end\n")
+	writeFile(t, root, "config.ru", "run Rails.application\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(p.StartCommand, " "), "bin/rails server -b 0.0.0.0 -p 3000"; got != want {
+		t.Fatalf("Rails start command = %q, want %q", got, want)
+	}
+	if len(p.BuildContextIgnore) != 1 || p.BuildContextIgnore[0] != "!bin" {
+		t.Fatalf("Rails build context must include its application scripts: %#v", p.BuildContextIgnore)
+	}
+}
+
+func TestRubyRackProjectUsesRackup(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "Gemfile", "source \"https://rubygems.org\"\ngem \"rack\"\n")
+	writeFile(t, root, "config.ru", "run ->(_env) { [200, {}, [\"ok\"]] }\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(p.StartCommand, " "), "bundle exec rackup --host 0.0.0.0 -p 3000"; got != want {
+		t.Fatalf("Rack start command = %q, want %q", got, want)
+	}
+}
+
 func TestDetectNodeAndRenderLeanRuntime(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "package.json", `{"name":"demo","scripts":{"build":"vite build","start":"node server.js"},"engines":{"node":">=20"}}`)
