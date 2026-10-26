@@ -189,6 +189,55 @@ func TestDetectLaravelWithReactFrontend(t *testing.T) {
 	}
 }
 
+func TestLaravelPHPVersionIncludesLockedPackageRequirements(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "composer.json", `{"require":{"php":"^8.3","laravel/framework":"^13.0"}}`)
+	writeFile(t, root, "composer.lock", `{"packages":[{"name":"symfony/http-foundation","require":{"php":">=8.4.1 <9.0"}}]}`)
+	writeFile(t, root, "artisan", "<?php\n")
+	writeFile(t, root, "public/index.php", "<?php\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Version != "8.4" || p.BuilderImage != "php:8.4-cli-bookworm" || p.RuntimeImage != "php:8.4-cli-bookworm" {
+		t.Fatalf("PHP image version ignored a locked dependency requirement: %#v", p)
+	}
+}
+
+func TestPHPVersionHonorsVersionFileAndIgnoresLockRangeUpperBound(t *testing.T) {
+	for name, files := range map[string]map[string]string{
+		"version file": {
+			"composer.json": `{"require":{"php":"^8.3"}}`,
+			".php-version":  "8.5.2\n",
+			"index.php":     "<?php\n",
+		},
+		"lock range upper bound": {
+			"composer.json": `{"require":{"php":"^8.3"}}`,
+			"composer.lock": `{"packages":[{"name":"example/package","require":{"php":"8.1 - 8.5"}}]}`,
+			"index.php":     "<?php\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			for path, contents := range files {
+				writeFile(t, root, path, contents)
+			}
+			p, err := Detect(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "8.5"
+			if name == "lock range upper bound" {
+				want = "8.3"
+			}
+			if p.Version != want {
+				t.Fatalf("PHP version = %q, want %q", p.Version, want)
+			}
+		})
+	}
+}
+
 func TestDetectLaravelWithoutFrontendAndRouteRequestsThroughFrontController(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "composer.json", `{"require":{"laravel/framework":"^12.0"}}`)

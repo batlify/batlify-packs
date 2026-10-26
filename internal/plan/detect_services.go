@@ -53,7 +53,7 @@ func phpPlan(root string) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	version := phpVersion(composer)
+	version := phpVersion(root, composer)
 	port := 8080
 	webRoot := "public"
 	if _, err := os.Stat(filepath.Join(root, "public", "index.php")); err != nil {
@@ -104,7 +104,7 @@ func laravelPlan(root string, composer composerManifest) (Plan, error) {
 		buildContextIgnore = []string{"public/build"}
 	}
 
-	version := phpVersion(composer)
+	version := phpVersion(root, composer)
 	return Plan{
 		Provider:           "laravel",
 		Language:           "PHP (Laravel)",
@@ -146,21 +146,69 @@ func readComposerManifest(root string) (composerManifest, error) {
 	return composer, nil
 }
 
-func phpVersion(composer composerManifest) string {
-	if version := firstMatch(regexp.MustCompile(`^([0-9]+\.[0-9]+)`), composer.Config.Platform["php"], ""); version != "" {
-		return version
+func phpVersion(root string, composer composerManifest) string {
+	version := "8.3"
+	if configured := firstMatch(regexp.MustCompile(`^([0-9]+\.[0-9]+)`), composer.Config.Platform["php"], ""); configured != "" {
+		version = configured
+	} else if minimum := firstMatch(regexp.MustCompile(`([0-9]+\.[0-9]+)`), composer.Require["php"], ""); minimum != "" {
+		parts := strings.SplitN(minimum, ".", 2)
+		major, majorErr := strconv.Atoi(parts[0])
+		minor, minorErr := strconv.Atoi(parts[1])
+		if majorErr == nil && minorErr == nil && (major > 8 || major == 8 && minor > 3) {
+			version = minimum
+		}
 	}
-	minimum := firstMatch(regexp.MustCompile(`([0-9]+\.[0-9]+)`), composer.Require["php"], "")
-	if minimum == "" {
-		return "8.3"
+	if pinned := firstMatch(regexp.MustCompile(`(?:^|v)([0-9]+\.[0-9]+)`), read(root, ".php-version"), ""); phpVersionGreater(pinned, version) {
+		version = pinned
 	}
-	parts := strings.SplitN(minimum, ".", 2)
-	major, majorErr := strconv.Atoi(parts[0])
-	minor, minorErr := strconv.Atoi(parts[1])
-	if majorErr == nil && minorErr == nil && (major > 8 || major == 8 && minor > 3) {
+	return phpVersionFromLock(root, version)
+}
+
+func phpVersionFromLock(root, minimum string) string {
+	var lock struct {
+		Packages []struct {
+			Require map[string]string `json:"require"`
+		} `json:"packages"`
+	}
+	if err := json.Unmarshal([]byte(read(root, "composer.lock")), &lock); err != nil {
 		return minimum
 	}
-	return "8.3"
+	versionConstraint := regexp.MustCompile(`(?:^|[|,&\s])([~^]|~>|>=|>|<=|<|=)?\s*([0-9]+\.[0-9]+)(?:\.[0-9]+)?`)
+	selected := minimum
+	for _, packageInfo := range lock.Packages {
+		constraint := packageInfo.Require["php"]
+		for _, match := range versionConstraint.FindAllStringSubmatchIndex(constraint, -1) {
+			previous := strings.TrimRight(constraint[:match[0]], " \t")
+			operator := ""
+			if match[2] >= 0 {
+				operator = constraint[match[2]:match[3]]
+			}
+			if operator == "<" || operator == "<=" || strings.HasSuffix(previous, "-") {
+				continue
+			}
+			candidate := constraint[match[4]:match[5]]
+			if phpVersionGreater(candidate, selected) {
+				selected = candidate
+			}
+		}
+	}
+	return selected
+}
+
+func phpVersionGreater(candidate, current string) bool {
+	candidateParts := strings.SplitN(candidate, ".", 2)
+	currentParts := strings.SplitN(current, ".", 2)
+	if len(candidateParts) != 2 || len(currentParts) != 2 {
+		return false
+	}
+	candidateMajor, errCandidateMajor := strconv.Atoi(candidateParts[0])
+	candidateMinor, errCandidateMinor := strconv.Atoi(candidateParts[1])
+	currentMajor, errCurrentMajor := strconv.Atoi(currentParts[0])
+	currentMinor, errCurrentMinor := strconv.Atoi(currentParts[1])
+	if errCandidateMajor != nil || errCandidateMinor != nil || errCurrentMajor != nil || errCurrentMinor != nil {
+		return false
+	}
+	return candidateMajor > currentMajor || candidateMajor == currentMajor && candidateMinor > currentMinor
 }
 
 func elixirPlan(root string) (Plan, error) {
