@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -45,6 +48,25 @@ func nodePlan(root string) (Plan, error) {
 	if nextStandalone {
 		js.ProductionCommand = "mkdir -p .next/standalone/.next && if [ -d .next/static ]; then cp -a .next/static .next/standalone/.next/static; fi && if [ -d public ]; then cp -a public .next/standalone/public; fi"
 	}
+	if isNodeStaticFrontend(root, pkg) {
+		return Plan{
+			Provider:         "node",
+			Language:         "Node.js static frontend",
+			Version:          js.Version,
+			BuilderImage:     js.BuilderImage,
+			RuntimeImage:     "nginxinc/nginx-unprivileged:alpine",
+			RuntimeKind:      "node-static",
+			PackageManager:   js.PackageManager,
+			InstallCommand:   js.InstallCommand,
+			BuildCommand:     js.BuildCommand,
+			StartCommand:     []string{"nginx", "-g", "daemon off;"},
+			Port:             8080,
+			DependencyFiles:  js.DependencyFiles,
+			InstallAfterCopy: js.InstallAfterCopy,
+			BuildCacheTarget: js.CacheTarget,
+			RuntimeOutputDir: nodeStaticOutput(root, pkg),
+		}, nil
+	}
 	start := []string{"npm", "start"}
 	if js.PackageManager == "bun" {
 		start = []string{"bun", "run", "start"}
@@ -55,26 +77,6 @@ func nodePlan(root string) (Plan, error) {
 			start = []string{"node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"}
 		} else if _, ok := pkg.DevDeps["next"]; ok {
 			start = []string{"node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"}
-		} else if exists(root, "index.html") && js.BuildCommand != "" {
-			output := nodeStaticOutput(root, pkg)
-			start = []string{"nginx", "-g", "daemon off;"}
-			return Plan{
-				Provider:         "node",
-				Language:         "Node.js static frontend",
-				Version:          js.Version,
-				BuilderImage:     js.BuilderImage,
-				RuntimeImage:     "nginxinc/nginx-unprivileged:alpine",
-				RuntimeKind:      "node-static",
-				PackageManager:   js.PackageManager,
-				InstallCommand:   js.InstallCommand,
-				BuildCommand:     js.BuildCommand,
-				StartCommand:     start,
-				Port:             8080,
-				DependencyFiles:  js.DependencyFiles,
-				InstallAfterCopy: js.InstallAfterCopy,
-				BuildCacheTarget: js.CacheTarget,
-				RuntimeOutputDir: output,
-			}, nil
 		} else {
 			entry := pkg.Main
 			if entry == "" {
@@ -123,6 +125,51 @@ func nodePlan(root string) (Plan, error) {
 	}, nil
 }
 
+func isNodeStaticFrontend(root string, pkg nodeManifest) bool {
+	if pkg.Scripts["build"] == "" || hasNodeDependency(pkg, "next") {
+		return false
+	}
+	start := strings.Fields(pkg.Scripts["start"])
+	if len(start) == 0 {
+		return exists(root, "index.html") || hasAnyNodeDependency(pkg,
+			"react-scripts", "gatsby", "@angular/cli", "@vue/cli-service", "astro")
+	}
+	switch {
+	case hasNodeDependency(pkg, "react-scripts"):
+		return commandPair(start, "react-scripts", "start")
+	case hasNodeDependency(pkg, "gatsby"):
+		return commandPair(start, "gatsby", "develop")
+	case hasNodeDependency(pkg, "@angular/cli"):
+		return commandPair(start, "ng", "serve")
+	case hasNodeDependency(pkg, "@vue/cli-service"):
+		return commandPair(start, "vue-cli-service", "serve")
+	case hasNodeDependency(pkg, "astro"):
+		return commandPair(start, "astro", "dev")
+	case hasNodeDependency(pkg, "vite"):
+		return exists(root, "index.html") && (start[0] == "vite" || commandPair(start, "vite", "preview"))
+	default:
+		return false
+	}
+}
+
+func commandPair(command []string, executable, subcommand string) bool {
+	for index := 0; index+1 < len(command); index++ {
+		if command[index] == executable && command[index+1] == subcommand {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnyNodeDependency(pkg nodeManifest, names ...string) bool {
+	for _, name := range names {
+		if hasNodeDependency(pkg, name) {
+			return true
+		}
+	}
+	return false
+}
+
 func nextStandaloneConfigured(root string) bool {
 	for _, config := range []string{"next.config.js", "next.config.mjs", "next.config.cjs", "next.config.ts"} {
 		if nextStandaloneOutput.MatchString(read(root, config)) {
@@ -157,9 +204,7 @@ func nodeStaticOutput(root string, pkg nodeManifest) string {
 		return "public"
 	}
 	if hasNodeDependency(pkg, "@angular/cli") {
-		angular := read(root, "angular.json")
-		output := firstMatch(regexp.MustCompile(`"outputPath"\s*:\s*"([^"]+)"`), angular, "dist")
-		return output
+		return angularOutputDirectory(root, pkg.Name)
 	}
 	if hasNodeDependency(pkg, "vite") {
 		return "dist"
@@ -169,6 +214,70 @@ func nodeStaticOutput(root string, pkg nodeManifest) string {
 	}
 	if hasNodeDependency(pkg, "astro") {
 		return "dist"
+	}
+	return "dist"
+}
+
+func angularOutputDirectory(root, packageName string) string {
+	var workspace struct {
+		Projects map[string]struct {
+			Architect map[string]struct {
+				Builder string `json:"builder"`
+				Options struct {
+					OutputPath json.RawMessage `json:"outputPath"`
+				} `json:"options"`
+			} `json:"architect"`
+			Targets map[string]struct {
+				Builder string `json:"builder"`
+				Options struct {
+					OutputPath json.RawMessage `json:"outputPath"`
+				} `json:"options"`
+			} `json:"targets"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal([]byte(read(root, "angular.json")), &workspace); err != nil {
+		return "dist"
+	}
+	projectNames := make([]string, 0, len(workspace.Projects))
+	for name := range workspace.Projects {
+		projectNames = append(projectNames, name)
+	}
+	sort.Strings(projectNames)
+	if _, ok := workspace.Projects[packageName]; ok {
+		projectNames = append([]string{packageName}, slices.DeleteFunc(projectNames, func(name string) bool { return name == packageName })...)
+	}
+	for _, name := range projectNames {
+		project := workspace.Projects[name]
+		target, ok := project.Architect["build"]
+		if !ok {
+			target, ok = project.Targets["build"]
+		}
+		if !ok {
+			continue
+		}
+		var base string
+		var browser string
+		if err := json.Unmarshal(target.Options.OutputPath, &base); err == nil {
+			if strings.HasSuffix(target.Builder, ":application") {
+				browser = "browser"
+			}
+		} else {
+			var output struct {
+				Base    string `json:"base"`
+				Browser string `json:"browser"`
+			}
+			if err := json.Unmarshal(target.Options.OutputPath, &output); err != nil {
+				continue
+			}
+			base, browser = output.Base, output.Browser
+		}
+		if base == "" {
+			base = filepath.Join("dist", name)
+		}
+		if browser != "" {
+			base = filepath.Join(base, browser)
+		}
+		return filepath.ToSlash(base)
 	}
 	return "dist"
 }

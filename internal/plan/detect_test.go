@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,6 +48,64 @@ func TestDetectNodeAndRenderLeanRuntime(t *testing.T) {
 		if !strings.Contains(dockerfile, required) {
 			t.Errorf("Dockerfile missing %q:\n%s", required, dockerfile)
 		}
+	}
+}
+
+func TestNodeStaticFrameworksUseProductionAssets(t *testing.T) {
+	cases := []struct {
+		name       string
+		dependency string
+		start      string
+		files      map[string]string
+		output     string
+	}{
+		{name: "Vite", dependency: "vite", start: "vite --host", files: map[string]string{"index.html": "<main>Vite</main>"}, output: "dist"},
+		{name: "Create React App", dependency: "react-scripts", start: "react-scripts start", files: map[string]string{"public/index.html": "<main>CRA</main>"}, output: "build"},
+		{name: "Gatsby", dependency: "gatsby", start: "gatsby develop", files: map[string]string{"src/pages/index.js": "export default () => <main>Gatsby</main>"}, output: "public"},
+		{name: "Angular application builder", dependency: "@angular/cli", start: "ng serve", files: map[string]string{"angular.json": `{"projects":{"demo":{"architect":{"build":{"builder":"@angular-devkit/build-angular:application","options":{"outputPath":"dist/demo"}}}}}}`}, output: "dist/demo/browser"},
+		{name: "Angular browser builder", dependency: "@angular/cli", start: "ng serve", files: map[string]string{"angular.json": `{"projects":{"demo":{"architect":{"build":{"builder":"@angular-devkit/build-angular:browser","options":{"outputPath":"dist/demo"}}}}}}`}, output: "dist/demo"},
+		{name: "Vue CLI", dependency: "@vue/cli-service", start: "vue-cli-service serve", files: map[string]string{"public/index.html": "<main>Vue</main>"}, output: "dist"},
+		{name: "Astro", dependency: "astro", start: "astro dev", files: map[string]string{"src/pages/index.astro": "<main>Astro</main>"}, output: "dist"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			manifest := fmt.Sprintf(`{"name":"demo","scripts":{"build":"build-command","start":%q},"dependencies":{%q:"1"}}`, tc.start, tc.dependency)
+			writeFile(t, root, "package.json", manifest)
+			writeFile(t, root, "package-lock.json", `{"lockfileVersion":3}`)
+			for path, contents := range tc.files {
+				writeFile(t, root, path, contents)
+			}
+			p, err := Detect(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.RuntimeKind != "node-static" || p.RuntimeOutputDir != tc.output || p.Port != 8080 {
+				t.Fatalf("unexpected static frontend plan: %#v", p)
+			}
+			dockerfile, err := p.Dockerfile()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(dockerfile, "/app/"+tc.output+"/") || !strings.Contains(dockerfile, "nginxinc/nginx-unprivileged:alpine") {
+				t.Fatalf("Dockerfile does not serve %s production assets:\n%s", tc.output, dockerfile)
+			}
+		})
+	}
+}
+
+func TestNodeStaticDetectionKeepsCustomServer(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "package.json", `{"scripts":{"build":"vite build","start":"node server.js"},"dependencies":{"vite":"1"}}`)
+	writeFile(t, root, "package-lock.json", `{"lockfileVersion":3}`)
+	writeFile(t, root, "index.html", "<main>Vite</main>")
+	writeFile(t, root, "server.js", "console.log('server')")
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.RuntimeKind != "node" || strings.Join(p.StartCommand, " ") != "npm start" {
+		t.Fatalf("custom Node server was incorrectly classified as static: %#v", p)
 	}
 }
 
