@@ -50,6 +50,33 @@ func TestDetectNodeAndRenderLeanRuntime(t *testing.T) {
 	}
 }
 
+func TestNodeVersionUsesPinnedNVMRCAndEngineMajor(t *testing.T) {
+	t.Run("exact nvmrc version", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "package.json", `{"scripts":{"start":"node server.js"},"engines":{"node":">=20.19.0"}}`)
+		writeFile(t, root, ".nvmrc", "v20.19.1\n")
+		p, err := Detect(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Version != "20.19.1" || p.BuilderImage != "node:20.19.1-bookworm-slim" {
+			t.Fatalf(".nvmrc version was not preserved: %#v", p)
+		}
+	})
+
+	t.Run("engine range", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "package.json", `{"scripts":{"start":"node server.js"},"engines":{"node":">=20.19.0"}}`)
+		p, err := Detect(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.Version != "20" || p.BuilderImage != "node:20-bookworm-slim" {
+			t.Fatalf("Node engine range produced an invalid image tag: %#v", p)
+		}
+	})
+}
+
 func TestDetectLaravelWithReactFrontend(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "composer.json", `{"require":{"php":"^8.2","laravel/framework":"^11.0"}}`)
@@ -191,6 +218,60 @@ func TestNextProjectMustHaveProductionDependenciesAndBuildScript(t *testing.T) {
 			t.Fatalf("expected a missing build script error, got %v", err)
 		}
 	})
+}
+
+func TestNextStandaloneUsesTracedRuntimeFiles(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "package.json", `{"scripts":{"build":"next build","start":"next start"},"dependencies":{"next":"^15.0.0"}}`)
+	writeFile(t, root, "package-lock.json", `{"lockfileVersion":3}`)
+	writeFile(t, root, "next.config.js", "module.exports = { output: 'standalone' }\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.NextStandalone || strings.Join(p.StartCommand, " ") != "node server.js" {
+		t.Fatalf("unexpected standalone Next.js plan: %#v", p)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"mkdir -p .next/standalone/.next",
+		"cp -a .next/static .next/standalone/.next/static",
+		"cp -a public .next/standalone/public",
+		"COPY --from=build --chown=node:node /app/.next/standalone/ /app/",
+		"ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000",
+		`CMD ["node","server.js"]`,
+	} {
+		if !strings.Contains(dockerfile, required) {
+			t.Errorf("standalone Next.js Dockerfile is missing %q:\n%s", required, dockerfile)
+		}
+	}
+	if strings.Contains(dockerfile, "npm prune --omit=dev") || strings.Contains(dockerfile, "COPY --from=build --chown=node:node /app /app") {
+		t.Fatalf("standalone Next.js runtime still copies the full application tree:\n%s", dockerfile)
+	}
+}
+
+func TestNextStandaloneDetectionIgnoresCommentsAndCustomServers(t *testing.T) {
+	for name, config := range map[string]string{
+		"comment":       "// output: 'standalone'\nmodule.exports = {}\n",
+		"custom server": "module.exports = { output: 'standalone' }\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, "package.json", `{"scripts":{"build":"next build","start":"node server.js"},"dependencies":{"next":"^15.0.0"}}`)
+			writeFile(t, root, "next.config.js", config)
+			p, err := Detect(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if p.NextStandalone {
+				t.Fatalf("standalone mode should not replace this project's server command: %#v", p)
+			}
+		})
+	}
 }
 
 func TestDetectGoUsesScratchRuntimeAndSubdirectoryEntrypoint(t *testing.T) {

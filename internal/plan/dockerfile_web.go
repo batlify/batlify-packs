@@ -10,6 +10,11 @@ func writeNodeDockerfile(b *strings.Builder, p Plan) {
 	if p.ProductionCommand != "" {
 		fmt.Fprintf(b, "RUN %s\n", p.ProductionCommand)
 	}
+	if p.NextStandalone {
+		fmt.Fprintf(b, "\nFROM %s AS runtime\nWORKDIR /app\nENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=%d\nCOPY --from=build --chown=node:node /app/.next/standalone/ /app/\nUSER node\n", p.RuntimeImage, p.Port)
+		writeExposeAndCommand(b, p)
+		return
+	}
 	fmt.Fprintf(b, "\nFROM %s AS runtime\nWORKDIR /app\nENV NODE_ENV=production\nCOPY --from=build --chown=node:node /app /app\nUSER node\n", p.RuntimeImage)
 	writeExposeAndCommand(b, p)
 }

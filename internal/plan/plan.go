@@ -23,6 +23,7 @@ type Plan struct {
 	ProjectFile       string           `json:"projectFile,omitempty"`
 	RuntimeOutputDir  string           `json:"runtimeOutputDir,omitempty"`
 	FrontendBuild     *JavaScriptBuild `json:"frontendBuild,omitempty"`
+	NextStandalone    bool             `json:"nextStandalone,omitempty"`
 	BuildCacheTarget  string           `json:"-"`
 	RuntimeKind       string           `json:"-"`
 	InstallCommand    string           `json:"-"`

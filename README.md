@@ -63,7 +63,7 @@ go build -buildvcs=false -o batlify-packs .
 docker run --rm -p 3000:3000 my-next-app:dev
 ```
 
-The project must declare a `build` script and either a usable production `start` script or a Next.js dependency in `dependencies`. The CLI does not currently expose build-time environment variables; projects that require them need a recipe change before they can be built. Runtime variables can be passed to `docker run`.
+The project must declare a `build` script and either a usable production `start` script or a Next.js dependency in `dependencies`. For a smaller runtime image, set `output: 'standalone'` in `next.config.*`; the builder then copies Next.js's traced server files, static assets, and public files. Without standalone output, it uses the regular production start path. The CLI does not currently expose build-time environment variables; projects that require them need a recipe change before they can be built. Runtime variables can be passed to `docker run`.
 
 ## Built-in providers
 
@@ -71,7 +71,7 @@ Detection uses project manifests and conventional entry points. A provider may r
 
 | Project type | Detection and current conventions |
 | --- | --- |
-| Node.js | `package.json`; npm, pnpm, Yarn, or Bun; server apps and common static output from Vite, Create React App, Gatsby, Angular, Vue CLI, and Astro. Next.js uses its production start command. |
+| Node.js | `package.json`; npm, pnpm, Yarn, or Bun; server apps and common static output from Vite, Create React App, Gatsby, Angular, Vue CLI, and Astro. Next.js uses its standalone runtime when `next.config.*` sets `output: 'standalone'`; otherwise it uses its production start command. |
 | Deno | `deno.json` or `deno.jsonc` with a `start` task, or a conventional entry file. |
 | Python | `requirements.txt`, `requirements-prod.txt`, `pyproject.toml`, `Pipfile`, or `setup.py`; conventional Django, Flask, FastAPI, or Python entry points. |
 | Go | `go.mod` and a root `main.go`, or one command under `cmd/`. |

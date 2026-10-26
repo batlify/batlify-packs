@@ -21,9 +21,13 @@ type JavaScriptBuild struct {
 }
 
 func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
-	version := firstMatch(regexp.MustCompile(`(?:^|v)([0-9]+)`), read(root, ".nvmrc"), "")
+	nvmrc := read(root, ".nvmrc")
+	version := firstMatch(regexp.MustCompile(`(?m)^\s*v?([0-9]+(?:\.[0-9]+){2})\s*$`), nvmrc, "")
 	if version == "" {
-		version = firstMatch(regexp.MustCompile(`(?:^|[^0-9])([0-9]+)(?:\.[0-9]+)?`), pkg.Engines["node"], "22")
+		version = firstMatch(regexp.MustCompile(`(?m)^\s*v?([0-9]+)`), nvmrc, "")
+	}
+	if version == "" {
+		version = firstMatch(regexp.MustCompile(`(?:^|[^0-9])([0-9]+)`), pkg.Engines["node"], "22")
 	}
 
 	build := JavaScriptBuild{
@@ -73,7 +77,8 @@ func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
 			build.BuildCommand = "bun run build"
 		}
 	}
-	if major, err := strconv.Atoi(build.Version); err == nil && major < 18 && build.PackageManager != "bun" {
+	majorVersion := firstMatch(regexp.MustCompile(`^([0-9]+)`), build.Version, "22")
+	if major, err := strconv.Atoi(majorVersion); err == nil && major < 18 && build.PackageManager != "bun" {
 		build.BuilderImage = ""
 		return build
 	}

@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var nextStandaloneOutput = regexp.MustCompile(`(?m)(?:^[ \t]*|[,{][ \t]*)(?:["']?output["']?)[ \t]*:[ \t]*["']standalone["']`)
+
 type nodeManifest struct {
 	Name         string            `json:"name"`
 	Main         string            `json:"main"`
@@ -35,6 +37,13 @@ func nodePlan(root string) (Plan, error) {
 	js := detectJavaScriptBuild(root, pkg)
 	if err := requireSupportedJavaScriptBuild(js); err != nil {
 		return Plan{}, err
+	}
+	nextStandalone := nextInDependencies &&
+		js.PackageManager != "bun" &&
+		usesNextStartScript(pkg.Scripts["start"]) &&
+		nextStandaloneConfigured(root)
+	if nextStandalone {
+		js.ProductionCommand = "mkdir -p .next/standalone/.next && if [ -d .next/static ]; then cp -a .next/static .next/standalone/.next/static; fi && if [ -d public ]; then cp -a public .next/standalone/public; fi"
 	}
 	start := []string{"npm", "start"}
 	if js.PackageManager == "bun" {
@@ -85,6 +94,9 @@ func nodePlan(root string) (Plan, error) {
 			}
 		}
 	}
+	if nextStandalone {
+		start = []string{"node", "server.js"}
+	}
 	runtimeImage := js.BuilderImage
 	runtimeKind := "node"
 	language := "Node.js"
@@ -101,6 +113,7 @@ func nodePlan(root string) (Plan, error) {
 		PackageManager:    js.PackageManager,
 		InstallCommand:    js.InstallCommand,
 		ProductionCommand: js.ProductionCommand,
+		NextStandalone:    nextStandalone,
 		BuildCommand:      js.BuildCommand,
 		StartCommand:      start,
 		Port:              port,
@@ -108,6 +121,28 @@ func nodePlan(root string) (Plan, error) {
 		InstallAfterCopy:  js.InstallAfterCopy,
 		BuildCacheTarget:  js.CacheTarget,
 	}, nil
+}
+
+func nextStandaloneConfigured(root string) bool {
+	for _, config := range []string{"next.config.js", "next.config.mjs", "next.config.cjs", "next.config.ts"} {
+		if nextStandaloneOutput.MatchString(read(root, config)) {
+			return true
+		}
+	}
+	return false
+}
+
+func usesNextStartScript(script string) bool {
+	if strings.TrimSpace(script) == "" {
+		return true
+	}
+	fields := strings.Fields(script)
+	for i := 0; i+1 < len(fields); i++ {
+		if strings.TrimSuffix(fields[i], ".cmd") == "next" && fields[i+1] == "start" {
+			return true
+		}
+	}
+	return false
 }
 
 func installAfterCopyCandidate(root string, pkg nodeManifest) bool {
