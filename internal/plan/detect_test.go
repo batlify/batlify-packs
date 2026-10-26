@@ -721,6 +721,48 @@ func TestGradleDockerfilePreservesBuildStageOrdering(t *testing.T) {
 	}
 }
 
+func TestScalaSBTBuildsSelfContainedAssembly(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "build.sbt", "scalaVersion := \"2.13.15\"\nassembly / mainClass := Some(\"example.Main\")\n")
+	writeFile(t, root, "project/build.properties", "sbt.version=1.10.7\n")
+	writeFile(t, root, "project/plugins.sbt", "addSbtPlugin(\"com.eed3si9n\" % \"sbt-assembly\" % \"2.3.1\")\n")
+	writeFile(t, root, "src/main/scala/example/Main.scala", "object Main { def main(args: Array[String]): Unit = () }\n")
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Provider != "scala" || p.PackageManager != "SBT" || p.BuilderImage != "sbtscala/scala-sbt:eclipse-temurin-21_1.x" {
+		t.Fatalf("unexpected Scala/SBT plan: %#v", p)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"sbt -batch assembly", "target/scala-*/*.jar", "COPY --from=build /out/app.jar /app/app.jar", "eclipse-temurin:21-jre-jammy AS runtime"} {
+		if !strings.Contains(dockerfile, expected) {
+			t.Errorf("Scala Dockerfile missing %q:\n%s", expected, dockerfile)
+		}
+	}
+}
+
+func TestScalaSBTRequiresPinnedVersionAndAssemblyPlugin(t *testing.T) {
+	t.Run("pinned sbt version", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "build.sbt", "scalaVersion := \"3.3.3\"\n")
+		if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "project/build.properties") {
+			t.Fatalf("expected missing SBT version error, got %v", err)
+		}
+	})
+	t.Run("assembly plugin", func(t *testing.T) {
+		root := t.TempDir()
+		writeFile(t, root, "build.sbt", "scalaVersion := \"3.3.3\"\n")
+		writeFile(t, root, "project/build.properties", "sbt.version=1.10.7\n")
+		if _, err := Detect(root); err == nil || !strings.Contains(err.Error(), "sbt-assembly") {
+			t.Fatalf("expected missing assembly plugin error, got %v", err)
+		}
+	})
+}
+
 func TestGeneratedDockerfileUsesFullyQualifiedBaseImages(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "index.html", "hello")

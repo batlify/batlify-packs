@@ -48,7 +48,7 @@ func Detect(root string) (Plan, error) {
 		{name: "go", matches: exists(abs, "go.mod"), createPlan: goPlan},
 		{name: "rust", matches: exists(abs, "Cargo.toml"), createPlan: rustPlan},
 		{name: "dotnet", matches: anyGlob(abs, "*.csproj", "*.fsproj", "*.vbproj"), createPlan: dotnetPlan},
-		{name: "java", matches: anyExists(abs, "pom.xml", "build.gradle", "build.gradle.kts"), createPlan: javaPlan},
+		{name: "java", matches: anyExists(abs, "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt"), createPlan: javaPlan},
 		{name: "ruby", matches: exists(abs, "Gemfile"), createPlan: rubyPlan},
 		{name: "php", matches: (anyExists(abs, "composer.json", "index.php") || exists(abs, "public/index.php")) && !laravel, createPlan: phpPlan},
 		{name: "elixir", matches: exists(abs, "mix.exs"), createPlan: elixirPlan},

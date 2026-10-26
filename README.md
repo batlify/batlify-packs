@@ -76,7 +76,7 @@ Detection uses project manifests and conventional entry points. A provider may r
 | Python | Pip requirements files; Poetry, uv, and Pipenv projects with their lockfiles; conventional Django, Flask, FastAPI, or Python entry points. |
 | Go | `go.mod` and a root `main.go`, or one command under `cmd/`. |
 | Rust | A root `Cargo.toml` with one package. |
-| Java and JVM | Maven or Gradle projects that produce an executable JAR. |
+| Java and JVM | Maven or Gradle projects that produce an executable JAR. Scala/SBT projects must pin `sbt.version` and configure `sbt-assembly` to produce a self-contained JAR. |
 | .NET | One `.csproj`, `.fsproj`, or `.vbproj` file at the project root. |
 | Ruby | Bundler projects with a Rack, Rails, or `app.rb` entry point. |
 | Laravel | A root `composer.json` requiring `laravel/framework`, plus `artisan` and `public/index.php`. If a root `package.json` is present, it must define a `build` script that writes assets under `public/build` (the Laravel Vite default). A server-rendered Next.js app must be built as a separate image. |

@@ -10,6 +10,13 @@ import (
 
 func javaPlan(root string) (Plan, error) {
 	gradle := exists(root, "build.gradle") || exists(root, "build.gradle.kts")
+	sbt := exists(root, "build.sbt")
+	if sbt && (gradle || exists(root, "pom.xml")) {
+		return Plan{}, errors.New("project contains multiple JVM build systems; keep one root build file or split the projects")
+	}
+	if sbt {
+		return scalaPlan(root)
+	}
 	version := "21"
 	command, image, files := "mvn -B -DskipTests package && "+selectJarCommand("target"), "maven:3.9-eclipse-temurin-21", filesMatching(root, "pom.xml")
 	cacheTarget := "/root/.m2"
@@ -55,6 +62,44 @@ func javaPlan(root string) (Plan, error) {
 		Port:             8080,
 		DependencyFiles:  files,
 	}, nil
+}
+
+func scalaPlan(root string) (Plan, error) {
+	buildProperties := read(root, "project/build.properties")
+	sbtVersion := firstMatch(regexp.MustCompile(`(?m)^\s*sbt\.version\s*=\s*([0-9]+)\.[0-9]+`), buildProperties, "")
+	if sbtVersion == "" {
+		return Plan{}, errors.New("Scala/SBT project needs a pinned sbt.version in project/build.properties")
+	}
+	if sbtVersion != "1" && sbtVersion != "2" {
+		return Plan{}, fmt.Errorf("unsupported SBT major version %s; the provider supports SBT 1.x and 2.x", sbtVersion)
+	}
+	plugins := strings.Join([]string{read(root, "build.sbt"), read(root, "project/plugins.sbt")}, "\n")
+	if !strings.Contains(plugins, "sbt-assembly") {
+		return Plan{}, errors.New("Scala/SBT project needs the sbt-assembly plugin to produce a self-contained runtime JAR")
+	}
+	return Plan{
+		Provider:         "scala",
+		Language:         "Scala",
+		Version:          "21",
+		BuilderImage:     "sbtscala/scala-sbt:eclipse-temurin-21_" + sbtVersion + ".x",
+		RuntimeImage:     "eclipse-temurin:21-jre-jammy",
+		RuntimeKind:      "java",
+		PackageManager:   "SBT",
+		BuildCommand:     "sbt -batch assembly && " + selectScalaAssemblyCommand(),
+		BuildCacheTarget: "/home/sbtuser/.cache/coursier",
+		StartCommand:     []string{"java", "-jar", "/app/app.jar"},
+		Port:             8080,
+		DependencyFiles:  filesMatching(root, "build.sbt", "project/build.properties", "project/plugins.sbt", "project/*.scala", "project/*.sbt"),
+	}, nil
+}
+
+func selectScalaAssemblyCommand() string {
+	return strings.Join([]string{
+		`artifact=$(find target -type f -path 'target/scala-*/*.jar' -name '*assembly*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | sort | head -n 1)`,
+		`test -n "$artifact"`,
+		`mkdir -p /out`,
+		`cp "$artifact" /out/app.jar`,
+	}, " && \\\n     ")
 }
 
 func selectJarCommand(outputDir string) string {
