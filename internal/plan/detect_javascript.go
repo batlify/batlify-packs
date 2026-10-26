@@ -33,7 +33,7 @@ func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
 	build := JavaScriptBuild{
 		Version:           version,
 		PackageManager:    "npm",
-		DependencyFiles:   filesMatching(root, "package.json", "package-lock.json", "npm-shrinkwrap.json"),
+		DependencyFiles:   filesMatching(root, "package.json", "package-lock.json", "npm-shrinkwrap.json", ".npmrc"),
 		InstallCommand:    "npm install --no-audit --no-fund",
 		ProductionCommand: "npm prune --omit=dev --no-audit --no-fund && npm cache clean --force",
 		InstallAfterCopy:  installAfterCopyCandidate(root, pkg),
@@ -46,7 +46,7 @@ func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
 		build.Version = firstMatch(regexp.MustCompile(`bun@(?:v)?([0-9]+\.[0-9]+)`), pkg.PackageMgr, "1")
 		build.InstallCommand = "bun install --frozen-lockfile"
 		build.ProductionCommand = "bun install --production --frozen-lockfile"
-		build.DependencyFiles = filesMatching(root, "package.json", "bun.lock", "bun.lockb")
+		build.DependencyFiles = filesMatching(root, "package.json", "bun.lock", "bun.lockb", ".npmrc")
 	} else if strings.HasPrefix(pkg.PackageMgr, "pnpm@") || exists(root, "pnpm-lock.yaml") {
 		build.PackageManager = "pnpm"
 		build.InstallCommand = "corepack enable && corepack pnpm install --frozen-lockfile"
@@ -54,7 +54,7 @@ func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
 		if build.InstallAfterCopy {
 			build.ProductionCommand = "corepack pnpm install --prod --frozen-lockfile"
 		}
-		build.DependencyFiles = filesMatching(root, "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml")
+		build.DependencyFiles = filesMatching(root, "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc")
 	} else if strings.HasPrefix(pkg.PackageMgr, "yarn@") || exists(root, "yarn.lock") {
 		build.PackageManager = "yarn"
 		if strings.Contains(read(root, "yarn.lock"), "__metadata:") {
@@ -64,7 +64,7 @@ func detectJavaScriptBuild(root string, pkg nodeManifest) JavaScriptBuild {
 			build.InstallCommand = "corepack enable && corepack yarn install --frozen-lockfile"
 			build.ProductionCommand = "corepack yarn install --production --frozen-lockfile"
 		}
-		build.DependencyFiles = filesMatching(root, "package.json", "yarn.lock", ".yarnrc.yml")
+		build.DependencyFiles = filesMatching(root, "package.json", "yarn.lock", ".yarnrc.yml", ".npmrc")
 	}
 	if _, ok := pkg.Scripts["build"]; ok {
 		build.BuildCommand = "npm run build"

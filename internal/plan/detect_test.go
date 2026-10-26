@@ -313,6 +313,29 @@ func TestNodeRuntimeStartDoesNotRequireCorepack(t *testing.T) {
 	}
 }
 
+func TestNPMConfigurationIsUsedForInstallAndRemovedFromRuntime(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "package.json", `{"scripts":{"start":"node server.js"},"dependencies":{"express":"^4.0.0"}}`)
+	writeFile(t, root, "package-lock.json", `{"lockfileVersion":3}`)
+	writeFile(t, root, ".npmrc", "legacy-peer-deps=true\n")
+	writeFile(t, root, "server.js", "console.log('ready')\n")
+
+	p, err := Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dockerfile, err := p.Dockerfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configCopy := strings.Index(dockerfile, `COPY [".npmrc", ".npmrc"]`)
+	configRemoval := strings.Index(dockerfile, "RUN rm -f .npmrc")
+	runtimeStage := strings.Index(dockerfile, "AS runtime")
+	if configCopy < 0 || configRemoval < configCopy || runtimeStage < configRemoval {
+		t.Fatalf("npm config must be available during installation and removed before runtime:\n%s", dockerfile)
+	}
+}
+
 func TestNextProjectMustHaveProductionDependenciesAndBuildScript(t *testing.T) {
 	t.Run("next in dev dependencies", func(t *testing.T) {
 		root := t.TempDir()

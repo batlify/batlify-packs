@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -9,6 +10,9 @@ func writeNodeDockerfile(b *strings.Builder, p Plan) {
 	writeJavaScriptBuildStage(b, p, "build", nodeCacheTarget(p.PackageManager))
 	if p.ProductionCommand != "" {
 		fmt.Fprintf(b, "RUN %s\n", p.ProductionCommand)
+	}
+	if slices.Contains(p.DependencyFiles, ".npmrc") {
+		b.WriteString("RUN rm -f .npmrc\n")
 	}
 	if p.NextStandalone {
 		fmt.Fprintf(b, "\nFROM %s AS runtime\nWORKDIR /app\nENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=%d\nCOPY --from=build --chown=node:node /app/.next/standalone/ /app/\nUSER node\n", p.RuntimeImage, p.Port)
@@ -23,6 +27,9 @@ func writeBunDockerfile(b *strings.Builder, p Plan) {
 	writeJavaScriptBuildStage(b, p, "build", "/root/.bun/install/cache")
 	if p.ProductionCommand != "" {
 		fmt.Fprintf(b, "RUN %s\n", p.ProductionCommand)
+	}
+	if slices.Contains(p.DependencyFiles, ".npmrc") {
+		b.WriteString("RUN rm -f .npmrc\n")
 	}
 	fmt.Fprintf(b, `
 FROM %s AS runtime
